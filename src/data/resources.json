@@ -1835,6 +1835,16 @@
     "isFeatured": true
   },
   {
+  "id": "frontendatlas-system-design-framework",
+  "title": "FrontendAtlas",
+  "url": "https://frontendatlas.com/",
+  "description": "A step-by-step framework for answering frontend system design interview questions with clear trade-offs, state, and data flow.",
+  "category": "Learning",
+  "tags": ["frontend", "system-design", "interviews", "architecture"],
+  "addedOn": "2026-03-04",
+  "isFeatured": false
+  },
+  {
     "id": "shadcn",
     "title": "shadcn",
     "url": "https://ui.shadcn.com/",
