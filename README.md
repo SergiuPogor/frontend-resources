@@ -94,6 +94,7 @@
 - [Patterns.dev](https://www.patterns.dev/) - Free online resource on design, rendering, and performance patterns for building powerful web apps. Covers JavaScript, React, Vue, and performance optimization patterns.
 - [RxJS Documentation](https://rxjs.dev/) - Official RxJS docs. Comprehensive guides and API reference.
 - [State of JS](https://stateofjs.com/) - Annual survey of JavaScript ecosystem. See what
+- [The Concise TypeScript Book](https://github.com/gibbok/typescript-book) - Free and open-source TypeScript book covering fundamentals through advanced concepts, with 10,300+ stars on GitHub.
 - [TypeHero](https://typehero.dev/) - An ultimate, in-depth course and community for mastering modern TypeScript. Great for all skill levels.
 - [TypeScript](https://www.typescriptlang.org/) - Typed superset of JavaScript. Adds type safety and better tooling.
 - [TypeScript Handbook](https://www.typescriptlang.org/docs/handbook/intro.html) - Official TypeScript documentation. The best place to learn TypeScript.
