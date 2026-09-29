@@ -85,6 +85,7 @@
 
 - [Airbnb JavaScript Style Guide](https://github.com/airbnb/javascript) - Most popular JavaScript style guide. Great reference for code consistency.
 - [CodeWars](http://www.codewars.com/) - Fun way to practice JavaScript through coding challenges. Great for daily practice.
+- [Codington JavaScript Practice](https://codington.io/javascript) - Free browser-based JavaScript exercises with instant feedback and no account required.
 - [Eloquent JavaScript](http://eloquentjavascript.net/) - The best free book for learning JavaScript. Updated regularly, covers modern ES6+ features.
 - [JavaScript Design Patterns](https://addyosmani.com/resources/essentialjsdesignpatterns/book/index.html) - Free book on JavaScript design patterns. Essential for writing maintainable code.
 - [JavaScript Event Loop](http://latentflip.com/loupe/) - Visual tool to understand the event loop. Essential for understanding async JavaScript.
@@ -311,6 +312,7 @@
 - [freeCodeCamp](https://www.freecodecamp.org/) - Free coding bootcamp. Comprehensive curriculum with certifications.
 - [Frontend Interview Handbook](https://github.com/yangshun/front-end-interview-handbook) - Comprehensive frontend interview guide. Great for job preparation.
 - [Frontend Masters](https://frontendmasters.com/) - Premium video courses from industry experts. Best paid resource.
+- [FrontendAtlas](https://frontendatlas.com/) - A step-by-step framework for answering frontend system design interview questions with clear trade-offs, state, and data flow.
 - [GraphQL](https://graphql.org/) - The official documentation for GraphQL, a query language for your APIs and a runtime for fulfilling those queries.
 - [GreatFrontend](https://www.greatfrontend.com/) - The best platform for practicing frontend system design and preparing for frontend interviews.
 - [Learn RxJS](https://www.learnrxjs.io/) - Best resource for learning RxJS. Clear explanations and examples.
