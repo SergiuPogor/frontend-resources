@@ -357,6 +357,16 @@
     "isFeatured": false
   },
   {
+    "id": "codington-javascript-practice",
+    "title": "Codington JavaScript Practice",
+    "url": "https://codington.io/javascript",
+    "description": "Free browser-based JavaScript exercises with instant feedback and no account required.",
+    "category": "Learning",
+    "tags": ["javascript", "practice", "exercises", "free"],
+    "addedOn": "2026-09-29",
+    "isFeatured": false
+  },
+  {
     "id": "exercism",
     "title": "Exercism",
     "url": "http://exercism.io/",
