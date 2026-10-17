@@ -1,5 +1,7 @@
 import type { Config } from "tailwindcss";
 
+const token = (name: string) => `rgb(var(--${name}) / <alpha-value>)`;
+
 export default {
   content: [
     "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
@@ -9,8 +11,23 @@ export default {
   theme: {
     extend: {
       colors: {
-        background: "var(--background)",
-        foreground: "var(--foreground)",
+        bg: token("bg"),
+        surface: token("surface"),
+        ink: token("ink"),
+        muted: token("muted"),
+        rule: token("rule"),
+        link: token("link"),
+        visited: token("visited"),
+        like: token("like"),
+      },
+      fontFamily: {
+        sans: [
+          "Schibsted Grotesk Variable",
+          "ui-sans-serif",
+          "system-ui",
+          "sans-serif",
+        ],
+        mono: ["var(--font-geist-mono)", "ui-monospace", "monospace"],
       },
     },
   },

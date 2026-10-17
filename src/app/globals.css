@@ -2,30 +2,66 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Design tokens as RGB channels so Tailwind opacity modifiers work
+ * (e.g. bg-surface/80). Light by default, dark via system preference.
+ * `link` / `visited` mirror the browser's own link semantics: a resource
+ * you've opened turns purple.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: light;
+  --bg: 255 255 255;
+  --surface: 244 246 250;
+  --ink: 16 22 38;
+  --muted: 88 98 118;
+  --rule: 226 230 238;
+  --link: 36 66 235;
+  --visited: 118 56 214;
+  --like: 222 56 72;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    color-scheme: dark;
+    --bg: 14 19 31;
+    --surface: 23 30 46;
+    --ink: 230 235 245;
+    --muted: 145 156 178;
+    --rule: 38 48 71;
+    --link: 132 154 255;
+    --visited: 190 154 250;
+    --like: 255 110 120;
   }
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  background: rgb(var(--bg));
+  color: rgb(var(--ink));
 }
 
-/* Hide scrollbar for horizontal scrolling filter pills */
+:focus-visible {
+  outline: 2px solid rgb(var(--link));
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+::selection {
+  background: rgb(var(--link) / 0.2);
+}
+
+/* Horizontal chip rail */
 .scrollbar-hide {
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
 }
 
-.scrollbar-hide::-webkit-scrollbar {
-  display: none; /* Chrome, Safari, Opera */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
 }

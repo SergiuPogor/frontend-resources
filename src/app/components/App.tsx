@@ -1,473 +1,312 @@
-import { useState, useMemo, useEffect } from "react";
-import { Github, PlusCircle, Star } from "lucide-react";
-import { SearchBar } from "./SearchBar";
-import { ResourceCard } from "./ResourceCard";
-import { CategoryFilter } from "./CategoryFilter";
-import type { Category } from "../types/resource";
+"use client";
 
-import { getResources } from "../../lib/resources";
-import { supabase } from "../../lib/supabase";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
+import { Github, Plus, Star } from "lucide-react";
+import { getResources, type Resource } from "../../lib/resources";
+import { useLikes } from "../hooks/useLikes";
+import { SearchBar } from "./SearchBar";
+import { CategoryChips } from "./CategoryChips";
+import { ResourceRow } from "./ResourceRow";
+import { FeaturedPicks } from "./FeaturedPicks";
 
-function App() {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [sortBy, setSortBy] = useState("featured"); // default sort
-  const [selectedCategories, setSelectedCategories] = useState<Set<Category>>(
-    new Set()
-  );
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [likeCounts, setLikeCounts] = useState<Map<string, number>>(new Map());
-  const [userLikes, setUserLikes] = useState<Set<string>>(new Set());
-  const [githubStars, setGithubStars] = useState<number | null>(null);
+type SortKey = "featured" | "popular" | "newest";
+const SORT_LABELS: Record<SortKey, string> = {
+  featured: "Featured first",
+  popular: "Most liked",
+  newest: "Newest",
+};
+const isSortKey = (v: string | null): v is SortKey =>
+  v === "featured" || v === "popular" || v === "newest";
 
-  useEffect(() => {
-    // Fetch GitHub stars count
-    const fetchGithubStars = async () => {
-      try {
-        const response = await fetch(
-          "https://api.github.com/repos/codesandtags/frontend-documentation"
-        );
-        if (response.ok) {
-          const data = await response.json();
-          setGithubStars(data.stargazers_count);
-        }
-      } catch (error) {
-        console.error("Failed to fetch GitHub stars:", error);
-      }
-    };
+interface AppProps {
+  githubStars: number | null;
+  repo: string;
+}
 
-    fetchGithubStars();
-  }, []);
-
-  useEffect(() => {
-    async function fetchData() {
-      // Sign in anonymously if not already signed in
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (!session) {
-        // Sign in anonymously
-        const { error: authError } = await supabase.auth.signInAnonymously();
-        if (authError) {
-          console.error("Error signing in anonymously:", authError);
-          // If anonymous auth is not enabled, this will fail
-          // User needs to enable it in Supabase Dashboard > Authentication > Providers > Anonymous
-        }
-      }
-
-      // A) Fetch all public like counts
-      const { data: countsData } = await supabase
-        .from("resources")
-        .select("id, like_count");
-
-      if (countsData) {
-        const countsMap = new Map(
-          countsData.map((r) => [r.id, r.like_count || 0])
-        );
-        setLikeCounts(countsMap);
-      }
-
-      // B) Fetch this user's (anonymous) likes
-      // Get session again after potential sign-in
-      const {
-        data: { session: currentSession },
-      } = await supabase.auth.getSession();
-
-      if (currentSession) {
-        const { data: likesData } = await supabase
-          .from("likes")
-          .select("resource_id")
-          .eq("user_id", currentSession.user.id);
-
-        if (likesData) {
-          const likesSet = new Set(likesData.map((l) => l.resource_id));
-          setUserLikes(likesSet);
-        }
-      }
-    }
-
-    fetchData();
-  }, []);
-
-  const resources = useMemo(() => getResources(), []);
-
-  // 1. Create a memoized list that filters by CATEGORY and SEARCH
-  const filteredResources = useMemo(() => {
-    const lowerCaseQuery = searchQuery.toLowerCase();
-    return (
-      resources
-        // First, filter by the active categories (OR logic - show if matches any selected category)
-        .filter((resource) => {
-          if (selectedCategories.size === 0) return true;
-          return selectedCategories.has(resource.category as Category);
-        })
-        // Next, filter by the search query
-        .filter((resource) => {
-          if (lowerCaseQuery === "") return true;
-          return (
-            resource.title.toLowerCase().includes(lowerCaseQuery) ||
-            resource.description.toLowerCase().includes(lowerCaseQuery) ||
-            resource.tags.some((tag) =>
-              tag.toLowerCase().includes(lowerCaseQuery)
-            )
-          );
-        })
-    );
-  }, [resources, selectedCategories, searchQuery]);
-
-  // 2. Create a memoized list that SORTS the filtered results
-  const sortedResources = useMemo(() => {
-    // Make a copy to avoid mutating the memoized 'filteredResources'
-    return [...filteredResources].sort((a, b) => {
-      switch (sortBy) {
-        case "popular":
-          // Sort by 'like_count' descending
-          return (likeCounts.get(b.id) || 0) - (likeCounts.get(a.id) || 0);
-
-        case "newest":
-          // Sort by 'addedOn' date descending
-          return new Date(b.addedOn).getTime() - new Date(a.addedOn).getTime();
-
-        case "featured":
-        default:
-          // This is the logic we had before
-          if (a.isFeatured && !b.isFeatured) return -1;
-          if (!a.isFeatured && b.isFeatured) return 1;
-          // As a fallback, sort featured items by newest
-          return new Date(b.addedOn).getTime() - new Date(a.addedOn).getTime();
-      }
-    });
-  }, [filteredResources, sortBy, likeCounts]);
-
-  const handleLikeToggle = async (resourceId: string) => {
-    try {
-      // Ensure user is authenticated (sign in anonymously if needed)
-      let {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (!session) {
-        // Sign in anonymously
-        const { data: authData, error: authError } =
-          await supabase.auth.signInAnonymously();
-        if (authError) {
-          console.error("Error signing in anonymously:", authError);
-          return; // Exit early if auth fails
-        }
-        session = authData.session;
-      }
-
-      // A) Optimistic UI Update (Instant feedback)
-      const isCurrentlyLiked = userLikes.has(resourceId);
-      const newLikedSet = new Set(userLikes);
-      const newLikeCounts = new Map(likeCounts);
-      const currentCount = likeCounts.get(resourceId) || 0;
-
-      if (isCurrentlyLiked) {
-        newLikedSet.delete(resourceId);
-        newLikeCounts.set(resourceId, Math.max(0, currentCount - 1)); // Prevent negative
-      } else {
-        newLikedSet.add(resourceId);
-        newLikeCounts.set(resourceId, currentCount + 1);
-      }
-
-      setUserLikes(newLikedSet);
-      setLikeCounts(newLikeCounts);
-
-      // B) Call the secure backend Edge Function
-      const { error } = await supabase.functions.invoke("toggle-like", {
-        body: { resource_id: resourceId },
-        headers: {
-          Authorization: `Bearer ${session!.access_token}`,
-        },
-      });
-
-      if (error) {
-        throw error; // This will be caught by the catch block
-      }
-    } catch (error) {
-      console.error("Error toggling like:", error);
-      // TODO: Revert optimistic update on error
-    }
-  };
-
+function matches(resource: Resource, q: string): boolean {
+  if (!q) return true;
   return (
-    <div className="min-h-screen bg-gray-900">
-      {/* Navigation */}
-      <nav className="bg-gray-800 backdrop-blur-sm sticky top-0 z-50 border-b border-gray-700">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-3">
-              <Image
-                src="/logo.png"
-                alt="Frontend Resources"
-                width={32}
-                height={32}
-              />
-              <span className="text-sm sm:text-lg font-semibold text-white leading-tight">
-                Frontend Resources
-              </span>
-            </div>
-            <div className="flex items-center gap-4">
-              <a
-                href="https://github.com/codesandtags/frontend-documentation"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 text-gray-300 hover:text-white transition-colors px-4 py-2 rounded-lg hover:bg-gray-700"
-              >
-                <Github className="h-5 w-5" />
-                <span className="hidden sm:inline">GitHub</span>
-                {githubStars !== null && (
-                  <span className="flex items-center gap-1 text-sm">
-                    <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                    <span>{githubStars.toLocaleString()}</span>
-                  </span>
-                )}
-              </a>
-              <a
-                href="https://github.com/codesandtags/frontend-resources/blob/main/CONTRIBUTING.md"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                <PlusCircle className="h-5 w-5" />
-                <span className="hidden sm:inline">Add Resource</span>
-              </a>
-            </div>
-          </div>
-        </div>
-      </nav>
-
-      {/* Hero Section */}
-      <div className="bg-gray-800 border-b border-gray-700">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <p className="text-center text-gray-300 text-lg">
-            🚀 A community-curated list of the best frontend tools, libraries,
-            and learning materials with over{" "}
-            <span className="font-semibold text-orange-500">
-              {resources.length}
-            </span>{" "}
-            resources.
-          </p>
-        </div>
-      </div>
-
-      {/* Sticky Search Bar */}
-      <div className="sticky top-16 z-40 bg-gray-800 border-b border-gray-700">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="space-y-3">
-            <div className="flex gap-4 items-center">
-              <div className="flex-1">
-                <SearchBar value={searchQuery} onChange={setSearchQuery} />
-              </div>
-              <button
-                onClick={() => setIsDrawerOpen(true)}
-                className="md:hidden p-2 bg-gray-700 rounded-md text-white"
-              >
-                Filter & Sort
-              </button>
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="hidden md:block bg-gray-800 border border-gray-700 rounded-md p-2 text-white"
-              >
-                <option value="featured">Sort by: Featured</option>
-                <option value="popular">Sort by: Popular</option>
-                <option value="newest">Sort by: Newest</option>
-              </select>
-            </div>
-            {selectedCategories.size > 0 && (
-              <div className="flex items-center gap-2 text-sm text-gray-400">
-                <span>
-                  {selectedCategories.size} filter
-                  {selectedCategories.size > 1 ? "s" : ""} applied
-                </span>
-                <button
-                  onClick={() => setSelectedCategories(new Set())}
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  <span className="text-xs">×</span>
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex gap-8">
-          {/* Left: Resource Grid */}
-          <div className="flex-1 min-w-0">
-            <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
-              {sortedResources.map((resource) => {
-                // Get the dynamic data
-                const count = likeCounts.get(resource.id) || 0;
-                const isLiked = userLikes.has(resource.id);
-
-                return (
-                  <ResourceCard
-                    key={resource.id}
-                    resource={{
-                      ...resource,
-                      category: resource.category as Category,
-                    }}
-                    likeCount={count}
-                    isLiked={isLiked}
-                    onLikeToggle={() => handleLikeToggle(resource.id)}
-                  />
-                );
-              })}
-            </div>
-
-            {sortedResources.length === 0 && (
-              <div className="text-center py-12">
-                <p className="text-gray-400 text-lg">
-                  No resources found matching your criteria.
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* Right: Category Filter Sidebar (Desktop only) */}
-          <aside className="hidden lg:block w-80 flex-shrink-0">
-            <div className="sticky top-24">
-              <CategoryFilter
-                selectedCategories={selectedCategories}
-                onToggle={(category) => {
-                  const newSet = new Set(selectedCategories);
-                  if (newSet.has(category)) {
-                    newSet.delete(category);
-                  } else {
-                    newSet.add(category);
-                  }
-                  setSelectedCategories(newSet);
-                }}
-                onClear={() => setSelectedCategories(new Set())}
-              />
-            </div>
-          </aside>
-        </div>
-      </main>
-
-      {/* Filter & Sort Drawer (Mobile) */}
-      {isDrawerOpen && (
-        <div
-          className="fixed inset-0 z-50 bg-black bg-opacity-50"
-          onClick={() => setIsDrawerOpen(false)}
-        >
-          <div
-            className="absolute top-0 right-0 h-full w-4/5 max-w-sm bg-gray-900 shadow-xl p-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Drawer Header */}
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-white">Filter & Sort</h2>
-              <button
-                onClick={() => setIsDrawerOpen(false)}
-                className="text-gray-400 hover:text-white text-2xl leading-none"
-              >
-                &times;
-              </button>
-            </div>
-
-            {/* Drawer Content */}
-            {/* 1. Sort By Dropdown */}
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Sort by
-              </label>
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 rounded-md p-2 text-white"
-              >
-                <option value="featured">Sort by: Featured</option>
-                <option value="popular">Sort by: Popular</option>
-                <option value="newest">Sort by: Newest</option>
-              </select>
-            </div>
-
-            {/* 2. Category Filter List */}
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-lg font-semibold text-white">
-                  Categories
-                  {selectedCategories.size > 0 && (
-                    <span className="text-sm font-normal text-gray-400 ml-2">
-                      ({selectedCategories.size} selected)
-                    </span>
-                  )}
-                </h3>
-                {selectedCategories.size > 0 && (
-                  <button
-                    onClick={() => setSelectedCategories(new Set())}
-                    className="text-xs text-gray-400 hover:text-white transition-colors"
-                  >
-                    Clear
-                  </button>
-                )}
-              </div>
-              <div className="flex flex-col space-y-2 max-h-[60vh] overflow-y-auto">
-                {[
-                  "CSS",
-                  "TypeScript",
-                  "Framework",
-                  "UI Library",
-                  "State Management",
-                  "Accessibility",
-                  "Performance",
-                  "Testing",
-                  "Security",
-                  "Tool",
-                  "Learning",
-                  "Design Resources",
-                  "PWA",
-                  "Animation",
-                  "Data Visualization",
-                  "3D & WebGL",
-                  "Platforms & Hosting",
-                  "Public APIs",
-                  "Git",
-                  "Utilities",
-                  "Web VR",
-                ].map((category) => {
-                  const isSelected = selectedCategories.has(
-                    category as Category
-                  );
-                  return (
-                    <label
-                      key={category}
-                      className="flex items-center gap-3 p-2 rounded-md hover:bg-gray-800 cursor-pointer transition-colors"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => {
-                          const newSet = new Set(selectedCategories);
-                          if (newSet.has(category as Category)) {
-                            newSet.delete(category as Category);
-                          } else {
-                            newSet.add(category as Category);
-                          }
-                          setSelectedCategories(newSet);
-                        }}
-                        className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500 focus:ring-2 focus:ring-offset-0 cursor-pointer"
-                      />
-                      <span className="text-sm text-gray-300 flex-1">
-                        {category}
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+    resource.title.toLowerCase().includes(q) ||
+    resource.description.toLowerCase().includes(q) ||
+    resource.category.toLowerCase().includes(q) ||
+    resource.tags.some((t) => t.toLowerCase().includes(q))
   );
 }
 
-export default App;
+const byNewest = (a: Resource, b: Resource) =>
+  new Date(b.addedOn).getTime() - new Date(a.addedOn).getTime();
+
+export default function App({ githubStars, repo }: AppProps) {
+  const resources = useMemo(() => getResources(), []);
+  const [query, setQuery] = useState("");
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  const [sortBy, setSortBy] = useState<SortKey>("featured");
+  const { state: likes, toggle } = useLikes();
+
+  // Hydrate filters from the URL once, then keep the URL in sync so a
+  // filtered view ("all CSS resources") is shareable.
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    setQuery(p.get("q") ?? "");
+    const cats = p.get("cat");
+    if (cats) setSelected(new Set(cats.split(",").filter(Boolean)));
+    const sort = p.get("sort");
+    if (isSortKey(sort)) setSortBy(sort);
+    setHydrated(true);
+  }, []);
+  useEffect(() => {
+    if (!hydrated) return;
+    const p = new URLSearchParams();
+    if (query) p.set("q", query);
+    if (selected.size) p.set("cat", [...selected].join(","));
+    if (sortBy !== "featured") p.set("sort", sortBy);
+    const qs = p.toString();
+    window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
+  }, [hydrated, query, selected, sortBy]);
+
+  const categories = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const r of resources) counts.set(r.category, (counts.get(r.category) ?? 0) + 1);
+    return [...counts.entries()]
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  }, [resources]);
+
+  const toggleCategory = useCallback((name: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  }, []);
+
+  const clearAll = useCallback(() => {
+    setQuery("");
+    setSelected(new Set());
+  }, []);
+
+  const q = query.trim().toLowerCase();
+  const isBrowsing = q === "" && selected.size === 0;
+
+  const featured = useMemo(
+    () => resources.filter((r) => r.isFeatured).sort(byNewest),
+    [resources]
+  );
+
+  const visible = useMemo(() => {
+    const filtered = resources.filter(
+      (r) => (selected.size === 0 || selected.has(r.category)) && matches(r, q)
+    );
+    const countOf = (id: string) =>
+      likes.status === "ready" ? likes.counts.get(id) ?? 0 : 0;
+    return filtered.sort((a, b) => {
+      switch (sortBy) {
+        case "popular":
+          return countOf(b.id) - countOf(a.id) || byNewest(a, b);
+        case "newest":
+          return byNewest(a, b);
+        case "featured":
+          return Number(!!b.isFeatured) - Number(!!a.isFeatured) || byNewest(a, b);
+      }
+    });
+  }, [resources, selected, q, sortBy, likes]);
+
+  // While browsing, picks render above the list, so don't repeat them.
+  const showPicks = isBrowsing && sortBy === "featured" && featured.length > 0;
+  const listed = showPicks ? visible.filter((r) => !r.isFeatured) : visible;
+
+  const repoUrl = `https://github.com/${repo}`;
+
+  return (
+    <div className="min-h-screen">
+      {/* Header */}
+      <header className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
+        <a href="/" className="flex min-w-0 items-center gap-2.5" aria-label="Frontend Resources home">
+          <Image src="/logo.png" alt="" width={28} height={28} className="shrink-0" priority />
+          <span className="truncate font-semibold tracking-tight">Frontend Resources</span>
+        </a>
+        <nav className="flex shrink-0 items-center gap-1 sm:gap-2">
+          <a
+            href={repoUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex h-9 items-center gap-2 rounded-full px-3 text-sm text-muted hover:bg-surface hover:text-ink"
+            aria-label={
+              githubStars !== null
+                ? `GitHub repository, ${githubStars} stars`
+                : "GitHub repository"
+            }
+          >
+            <Github className="h-4 w-4" aria-hidden="true" />
+            {githubStars !== null && (
+              <span className="inline-flex items-center gap-1 tabular-nums">
+                <Star className="h-3.5 w-3.5" aria-hidden="true" />
+                {githubStars.toLocaleString()}
+              </span>
+            )}
+          </a>
+          <a
+            href={`${repoUrl}/blob/main/CONTRIBUTING.md`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex h-9 items-center gap-1.5 rounded-full bg-ink px-3.5 text-sm font-medium text-bg hover:bg-ink/85"
+          >
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            <span className="hidden sm:inline">Suggest a resource</span>
+            <span className="sm:hidden">Suggest</span>
+          </a>
+        </nav>
+      </header>
+
+      {/* Hero */}
+      <section className="mx-auto max-w-6xl px-4 pb-8 pt-12 sm:px-6 sm:pt-20">
+        <h1 className="max-w-[18ch] text-[2.5rem] font-bold leading-[1.02] tracking-[-0.035em] sm:text-6xl lg:text-7xl">
+          {resources.length} good links for building the web.
+        </h1>
+        <p className="mt-5 max-w-[56ch] text-lg leading-relaxed text-muted">
+          Tools, libraries and guides for frontend developers, picked by the
+          community and maintained in the open on GitHub.
+        </p>
+        <div className="mt-8 max-w-3xl">
+          <SearchBar value={query} onChange={setQuery} total={resources.length} />
+          <p className="mt-3 flex items-center gap-2 text-sm text-muted">
+            <span className="h-2 w-2 rounded-full bg-visited" aria-hidden="true" />
+            Links you&apos;ve already opened turn purple.
+          </p>
+        </div>
+      </section>
+
+      {/* Filters */}
+      <div className="sticky top-0 z-30 border-y border-rule bg-bg/90 backdrop-blur supports-[backdrop-filter]:bg-bg/75">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+          <div className="[mask-image:linear-gradient(to_right,black_calc(100%-40px),transparent)]">
+            <CategoryChips
+              categories={categories}
+              total={resources.length}
+              selected={selected}
+              onToggle={toggleCategory}
+              onClear={() => setSelected(new Set())}
+            />
+          </div>
+        </div>
+      </div>
+
+      <main className="mx-auto max-w-6xl px-4 pb-24 sm:px-6">
+        {showPicks && <FeaturedPicks resources={featured} />}
+
+        <div className="flex items-center justify-between gap-4 pb-3 pt-10">
+          <h2 className="text-lg font-semibold tracking-tight" aria-live="polite">
+            {isBrowsing
+              ? "Everything"
+              : `${visible.length} of ${resources.length} resources`}
+          </h2>
+          <div className="flex shrink-0 items-center gap-4">
+            {!isBrowsing && (
+              <button
+                type="button"
+                onClick={clearAll}
+                className="hidden text-sm text-link underline-offset-4 hover:underline sm:inline"
+              >
+                Clear filters
+              </button>
+            )}
+            <label className="relative shrink-0">
+              <span className="sr-only">Sort resources</span>
+              <select
+                value={sortBy}
+                onChange={(e) => isSortKey(e.target.value) && setSortBy(e.target.value)}
+                className="h-9 cursor-pointer appearance-none rounded-full border border-rule bg-bg pl-3.5 pr-8 text-sm text-ink hover:border-muted focus:border-link focus:outline-none"
+              >
+                {(Object.keys(SORT_LABELS) as SortKey[]).map((key) => (
+                  <option key={key} value={key} disabled={key === "popular" && likes.status !== "ready"}>
+                    {SORT_LABELS[key]}
+                  </option>
+                ))}
+              </select>
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 12 12"
+                className="pointer-events-none absolute right-3 top-1/2 h-3 w-3 -translate-y-1/2 text-muted"
+              >
+                <path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
+              </svg>
+            </label>
+          </div>
+        </div>
+
+        {listed.length > 0 ? (
+          <ul className="divide-y divide-rule border-t border-rule">
+            {listed.map((r) => (
+              <ResourceRow
+                key={r.id}
+                resource={r}
+                likes={
+                  likes.status === "ready"
+                    ? { count: likes.counts.get(r.id) ?? 0, isLiked: likes.liked.has(r.id) }
+                    : null
+                }
+                onLikeToggle={() => void toggle(r.id)}
+                onTagClick={(tag) => {
+                  setQuery(tag);
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+              />
+            ))}
+          </ul>
+        ) : (
+          <div className="rounded-2xl bg-surface px-6 py-14 text-center">
+            <p className="text-lg font-semibold">
+              Nothing matches{q ? ` “${query.trim()}”` : " these filters"}.
+            </p>
+            <p className="mx-auto mt-2 max-w-[48ch] text-muted">
+              Try a broader term, or remove a category. If it should be here,
+              suggest it on GitHub.
+            </p>
+            <div className="mt-6 flex flex-wrap justify-center gap-3">
+              <button
+                type="button"
+                onClick={clearAll}
+                className="h-10 rounded-full bg-ink px-4 text-sm font-medium text-bg hover:bg-ink/85"
+              >
+                Clear search and filters
+              </button>
+              <a
+                href={`${repoUrl}/blob/main/CONTRIBUTING.md`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex h-10 items-center rounded-full border border-rule px-4 text-sm font-medium hover:border-muted"
+              >
+                Suggest a resource
+              </a>
+            </div>
+          </div>
+        )}
+      </main>
+
+      <footer className="border-t border-rule">
+        <div className="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-8 text-sm text-muted sm:flex-row sm:items-center sm:justify-between sm:px-6">
+          <p>Open source under the MIT license.</p>
+          <p>
+            Curated by{" "}
+            <a href="https://codesandtags.io" className="text-ink hover:underline underline-offset-4">
+              codesandtags
+            </a>{" "}
+            and{" "}
+            <a
+              href={`${repoUrl}/graphs/contributors`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-ink hover:underline underline-offset-4"
+            >
+              contributors
+            </a>
+            .
+          </p>
+        </div>
+      </footer>
+    </div>
+  );
+}
