@@ -2,15 +2,11 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import Script from "next/script";
 import { Analytics } from "@vercel/analytics/next";
+import "@fontsource-variable/schibsted-grotesk";
 import "./globals.css";
 
 const GTM_ID = process.env.NEXT_PUBLIC_GTM_ID || 'G-XY3GKG4Y6S';
 
-const geistSans = localFont({
-  src: "./fonts/GeistVF.woff",
-  variable: "--font-geist-sans",
-  weight: "100 900",
-});
 const geistMono = localFont({
   src: "./fonts/GeistMonoVF.woff",
   variable: "--font-geist-mono",
@@ -18,12 +14,15 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_SITE_URL ?? "https://frontend-resources-demo.vercel.app"
+  ),
   title: "Frontend Resources",
   description: "🚀 The official database for the 'Frontend Resources' website! A community-curated list of the best frontend tools, libraries, and learning materials. Contributions welcome! ⭐",
   openGraph: {
     title: "Frontend Resources",
     description: "🚀 The official database for the 'Frontend Resources' website! A community-curated list of the best frontend tools, libraries, and learning materials. Contributions welcome! ⭐",
-    url: "https://codesandtags.io",
+    url: "/",
     siteName: "Frontend Resources",
     images: [
       {
@@ -52,7 +51,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[#101010]`}
+        className={`${geistMono.variable} font-sans antialiased bg-bg text-ink`}
       >
         {/* Google Analytics / Google Tag Manager */}
         <Script
